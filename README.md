@@ -5,3 +5,8 @@
 Wrapper for POSIX daemon/windows service for Rust
 
 [Documentation](https://slonopotamus.github.io/daemon-rs/)
+
+```toml
+[dependencies]
+ipc = { git = "https://github.com/slonopotamus/daemon-rs" }
+```
