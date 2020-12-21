@@ -1,8 +1,5 @@
-#[cfg(target_os = "windows")]
-extern crate winapi;
-
 pub mod daemon;
-pub use daemon::*;
+pub use crate::daemon::*;
 
 mod singleton;
 

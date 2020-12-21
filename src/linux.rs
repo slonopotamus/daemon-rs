@@ -10,7 +10,7 @@ declare_singleton!(
     singleton,
     DaemonHolder,
     DaemonHolder {
-        holder: 0 as *mut DaemonStatic
+        holder: daemon_null()
     }
 );
 
@@ -19,7 +19,7 @@ struct DaemonHolder {
 }
 
 struct DaemonStatic {
-    holder: Box<DaemonFunc>,
+    holder: Box<dyn DaemonFunc>,
 }
 
 trait DaemonFunc {
@@ -83,9 +83,9 @@ impl DaemonRunner for Daemon {
                 func: Some((func, rx)),
             }),
         };
-        try!(guard_compare_and_swap(daemon_null(), &mut daemon));
+        guard_compare_and_swap(daemon_null(), &mut daemon)?;
         let result = daemon_console(&mut daemon);
-        try!(guard_compare_and_swap(&mut daemon, daemon_null()));
+        guard_compare_and_swap(&mut daemon, daemon_null())?;
         result
     }
 }
@@ -107,39 +107,19 @@ fn guard_compare_and_swap(
 }
 
 fn daemon_console(daemon: &mut DaemonStatic) -> Result<(), Error> {
-    let result;
-    unsafe {
-        //if SetConsoleCtrlHandler(Some(console_handler), TRUE) == FALSE
-        //{
-        //	return Err(format! ("Failed SetConsoleCtrlHandler: {}", error_string(GetLastError() as i32)));
-        //}
-        result = daemon.holder.exec();
-        //if SetConsoleCtrlHandler(Some(console_handler), FALSE) == FALSE
-        //{
-        //	return Err(format! ("Failed SetConsoleCtrlHandler: {}", error_string(GetLastError() as i32)));
-        //}
-    }
-    result
+    daemon.holder.exec()
 }
 
-unsafe extern "system" fn signal_handler(sig: libc::c_int) {
+#[allow(dead_code)]
+unsafe extern "system" fn signal_handler(_sig: libc::c_int) {
     daemon_wrapper(|daemon_static: &mut DaemonHolder| {
         let daemon = &mut *daemon_static.holder;
-        return match daemon.holder.take_tx() {
-            Some(ref tx) => {
-                let _ = tx.send(State::Stop);
-            }
-            None => (),
-        };
+        if let Some(ref tx) = daemon.holder.take_tx() {
+            let _ = tx.send(State::Stop);
+        }
     });
 }
 
 fn daemon_null() -> *mut DaemonStatic {
-    0 as *mut DaemonStatic
-}
-
-extern "C" {
-    fn raise(sig: libc::c_int) -> libc::c_int;
-    fn signal(sig: libc::c_int, handler: *const libc::c_void) -> libc::c_int;
-    fn kill(pid: libc::pid_t, sig: libc::c_int) -> libc::c_int;
+    std::ptr::null_mut::<DaemonStatic>()
 }
