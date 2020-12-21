@@ -15,7 +15,7 @@ declare_singleton!(
     singleton,
     DaemonHolder,
     DaemonHolder {
-        holder: 0 as *mut DaemonStatic
+        holder: daemon_null()
     }
 );
 
@@ -25,7 +25,7 @@ struct DaemonHolder {
 
 struct DaemonStatic {
     name: String,
-    holder: Box<DaemonFunc>,
+    holder: Box<dyn DaemonFunc>,
     handle: SERVICE_STATUS_HANDLE,
 }
 
@@ -206,16 +206,15 @@ unsafe extern "system" fn service_handler(
     daemon_wrapper(|daemon_static: &mut DaemonHolder| {
         let daemon = &mut *daemon_static.holder;
         match dw_control {
-            SERVICE_CONTROL_STOP | SERVICE_CONTROL_SHUTDOWN => match daemon.holder.take_tx() {
-                Some(ref tx) => {
+            SERVICE_CONTROL_STOP | SERVICE_CONTROL_SHUTDOWN => {
+                if let Some(ref tx) = daemon.holder.take_tx() {
                     SetServiceStatus(
                         daemon.handle,
                         &mut create_service_status(SERVICE_STOP_PENDING),
                     );
                     let _ = tx.send(State::Stop);
                 }
-                None => {}
-            },
+            }
             _ => {}
         };
     });
@@ -240,5 +239,5 @@ unsafe extern "system" fn console_handler(_: DWORD) -> BOOL {
 }
 
 fn daemon_null() -> *mut DaemonStatic {
-    0 as *mut DaemonStatic
+    std::ptr::null_mut::<DaemonStatic>()
 }
